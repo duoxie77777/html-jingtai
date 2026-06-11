@@ -1,0 +1,938 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>遇事先查档 事事有依据 - 档案查阅使用手册</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+        font-family: "Microsoft YaHei", system-ui, sans-serif;
+      }
+      :root {
+        --av-dark: #0f2b5b;
+        --av-main: #164796;
+        --av-light: #3474d0;
+        --av-gray: #f0f4fa;
+        --text-gray: #444;
+        --border-gray: #e2e8f0;
+      }
+      body {
+        background-color: var(--av-gray);
+        color: #333;
+        line-height: 1.7;
+      }
+      /* 全局遮罩 */
+      .mask {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 40;
+        display: none;
+      }
+      .mask.show {
+        display: block;
+      }
+      /* 弹窗专用遮罩（在 mask 之上、popup 之下，用于捕获点击关闭弹窗） */
+      .popup-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 55;
+        display: none;
+      }
+      .popup-overlay.show {
+        display: block;
+      }
+      /* 侧边菜单 */
+      .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 260px;
+        height: 100%;
+        background: #fff;
+        box-shadow: 2px 0 12px rgba(0, 30, 80, 0.12);
+        z-index: 50;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
+      }
+      .sidebar.open {
+        transform: translateX(0);
+      }
+      .sidebar-header {
+        padding: 24px 20px;
+        border-bottom: 1px solid var(--border-gray);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        position: sticky;
+        top: 0;
+        background: #fff;
+      }
+      .sidebar-header img {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+      }
+      .sidebar-header h2 {
+        font-size: 18px;
+        color: var(--av-dark);
+        flex: 1;
+      }
+      .close-btn {
+        border: none;
+        background: transparent;
+        font-size: 22px;
+        color: #666;
+        cursor: pointer;
+      }
+      .nav-item {
+        display: block;
+        padding: 12px 20px;
+        color: #444;
+        text-decoration: none;
+        transition: 0.2s;
+        cursor: pointer;
+      }
+      .nav-item.active {
+        border-left: 4px solid var(--av-light);
+        background: rgba(52, 116, 208, 0.08);
+        color: var(--av-main);
+      }
+      .nav-item:hover {
+        color: var(--av-main);
+      }
+      /* 顶部导航 */
+      .top-header {
+        position: sticky;
+        top: 0;
+        background: var(--av-main);
+        color: #fff;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 2px 12px rgba(22, 71, 150, 0.15);
+        z-index: 30;
+      }
+      .menu-btn {
+        background: transparent;
+        border: none;
+        color: #fff;
+        font-size: 22px;
+        cursor: pointer;
+        border-radius: 4px;
+      }
+      .menu-btn:hover {
+        background: var(--av-dark);
+      }
+      .top-header img {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+      }
+      .top-header h1 {
+        font-size: 18px;
+        font-weight: bold;
+      }
+      /* 主容器 */
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 16px;
+      }
+      /* 卡片通用 */
+      .card {
+        background: #fff;
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 2px 18px rgba(22, 71, 150, 0.08);
+        margin-bottom: 32px;
+      }
+      .card-title-wrap {
+        display: flex;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+      .line-mark {
+        width: 4px;
+        height: 26px;
+        background: var(--av-light);
+        margin-right: 12px;
+      }
+      .card-title {
+        font-size: 20px;
+        color: var(--av-dark);
+        font-weight: bold;
+      }
+      /* 树状图图片 */
+      .tree-img-wrap {
+        position: relative;
+        cursor: zoom-in;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .tree-img-wrap:hover .zoom-hint {
+        background: rgba(0, 0, 0, 0.75);
+      }
+      .tree-img {
+        width: 100%;
+        height: auto;
+        display: block;
+        transition: transform 0.3s ease;
+      }
+      .tree-img-wrap:hover .tree-img {
+        transform: scale(1.01);
+      }
+      .zoom-hint {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        opacity: 1;
+        transition: background 0.2s;
+        pointer-events: none;
+      }
+      /* 图片灯箱 */
+      .lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        cursor: zoom-out;
+        padding: 20px;
+      }
+      .lightbox.show {
+        display: flex;
+        animation: lbFadeIn 0.25s ease;
+      }
+      @keyframes lbFadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      .lightbox img {
+        max-width: 95%;
+        max-height: 95vh;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+      }
+      .lightbox-close {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        width: 40px;
+        height: 40px;
+        border: none;
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        font-size: 24px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+      .lightbox-close:hover {
+        background: rgba(255, 255, 255, 0.3);
+      }
+      /* 步骤项 */
+      .step-item {
+        display: flex;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+      .step-num {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--av-main);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-weight: bold;
+      }
+      /* 表格样式 */
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      table th,
+      table td {
+        padding: 12px;
+        text-align: left;
+        border: 1px solid var(--border-gray);
+      }
+      table thead tr {
+        background: var(--av-main);
+        color: #fff;
+      }
+      /* 索引列表 */
+      .index-list {
+        margin: 16px 0;
+      }
+      .index-item {
+        padding: 14px 16px;
+        border: 1px solid var(--border-gray);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 15px;
+      }
+      .index-item::after {
+        content: "›";
+        font-size: 20px;
+        color: #bbb;
+        transition: all 0.2s;
+        flex-shrink: 0;
+        margin-left: 12px;
+      }
+      .index-item:hover {
+        background: var(--av-gray);
+        border-color: var(--av-light);
+        color: var(--av-main);
+      }
+      .index-item:hover::after {
+        color: var(--av-light);
+        transform: translateX(2px);
+      }
+      .index-item:active {
+        transform: scale(0.99);
+      }
+      /* 弹窗样式 - 伪子页面 */
+      .popup {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%) scale(0.92);
+        width: 92%;
+        max-width: 560px;
+        max-height: 85vh;
+        background: #fff;
+        border-radius: 16px;
+        z-index: 60;
+        display: none;
+        box-shadow:
+          0 20px 60px rgba(0, 0, 0, 0.25),
+          0 0 0 1px rgba(0, 0, 0, 0.05);
+        opacity: 0;
+        overflow: hidden;
+        flex-direction: column;
+      }
+      .popup.show {
+        display: flex;
+        animation: popIn 0.3s ease forwards;
+      }
+      @keyframes popIn {
+        to {
+          opacity: 1;
+          transform: translate(-50%, -50%) scale(1);
+        }
+      }
+      .popup-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid var(--border-gray);
+        flex-shrink: 0;
+      }
+      .popup-header h3 {
+        font-size: 18px;
+        color: var(--av-dark);
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .popup-header h3::before {
+        content: "";
+        width: 4px;
+        height: 20px;
+        background: var(--av-light);
+        border-radius: 2px;
+      }
+      .popup-close {
+        width: 32px;
+        height: 32px;
+        border: none;
+        background: var(--av-gray);
+        border-radius: 50%;
+        font-size: 18px;
+        color: #666;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        flex-shrink: 0;
+      }
+      .popup-close:hover {
+        background: #e2e8f0;
+        color: #333;
+      }
+      .popup-body {
+        padding: 20px 24px;
+        overflow-y: auto;
+        flex: 1;
+      }
+      .info-section {
+        margin-bottom: 20px;
+      }
+      .info-section:last-child {
+        margin-bottom: 0;
+      }
+      .info-label {
+        font-size: 12px;
+        font-weight: bold;
+        color: var(--av-light);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .info-label .icon {
+        font-size: 14px;
+      }
+      .info-card {
+        background: var(--av-gray);
+        border-radius: 10px;
+        padding: 14px 16px;
+        border-left: 3px solid var(--av-light);
+      }
+      .info-card p {
+        font-size: 15px;
+        color: #333;
+        line-height: 1.7;
+      }
+      .info-card.approve-card {
+        border-left-color: #e6a23c;
+        background: #fdf6ec;
+      }
+      .info-card.approve-card.no-approve {
+        border-left-color: #67c23a;
+        background: #f0f9eb;
+      }
+      .approve-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 6px;
+      }
+      .approve-badge.need {
+        background: #fdf6ec;
+        color: #e6a23c;
+        border: 1px solid #e6a23c;
+      }
+      .approve-badge.no-need {
+        background: #f0f9eb;
+        color: #67c23a;
+        border: 1px solid #67c23a;
+      }
+      .divider {
+        height: 1px;
+        background: var(--border-gray);
+        margin: 16px 0;
+      }
+      .popup-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-gray);
+        display: flex;
+        justify-content: flex-end;
+        flex-shrink: 0;
+      }
+      .pop-btn {
+        padding: 10px 24px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+      .pop-btn.primary {
+        background: var(--av-main);
+        color: #fff;
+      }
+      .pop-btn.primary:hover {
+        background: var(--av-dark);
+        box-shadow: 0 2px 8px rgba(22, 71, 150, 0.3);
+      }
+      .pop-btn.close-pop {
+        background: #f0f0f0;
+        color: #666;
+      }
+      .pop-btn.close-pop:hover {
+        background: #e2e2e2;
+        color: #333;
+      }
+      /* 结语卡片 */
+      .end-card {
+        background: linear-gradient(90deg, var(--av-dark), var(--av-main));
+        color: #fff;
+        border-radius: 12px;
+        padding: 24px;
+      }
+      .end-card .line-mark {
+        background: #fff;
+      }
+      .end-card p {
+        font-size: 16px;
+        margin: 12px 0;
+      }
+      .end-card .strong-text {
+        font-size: 20px;
+        font-weight: bold;
+      }
+      .footer-sign {
+        margin-top: 32px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.3);
+        text-align: right;
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 全局遮罩 -->
+    <div class="mask" id="mask"></div>
+
+    <!-- 侧边菜单 + LOGO -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <img src="logo.jpg" alt="logo" />
+        <h2>目录导航</h2>
+        <button class="close-btn" id="closeMenu">×</button>
+      </div>
+      <nav>
+        <a href="#intro" class="nav-item">开篇寄语</a>
+        <a href="#part1" class="nav-item">一、档案馆各室业务划分</a>
+        <a href="#part2" class="nav-item">二、查档适用场景</a>
+        <a href="#part3" class="nav-item">三、常见障碍与对策</a>
+        <a href="#part4" class="nav-item">四、档案索引对照表</a>
+        <a href="#ending" class="nav-item">结语</a>
+      </nav>
+    </aside>
+
+    <!-- 顶部栏 + LOGO -->
+    <header class="top-header">
+      <button class="menu-btn" id="openMenu">☰</button>
+      <img src="logo.jpg" alt="logo" />
+      <h1>档案知识小册子</h1>
+    </header>
+
+    <main class="container">
+      <!-- 开篇寄语 -->
+      <section
+        id="intro"
+        class="card"
+        style="border-left: 6px solid var(--av-light)"
+      >
+        <div class="card-title-wrap">
+          <span class="line-mark"></span>
+          <h2 class="card-title">开篇寄语</h2>
+        </div>
+        <p>
+          档案是各项工作活动的原始记录，是历史的真实见证，更是推进工作、规范管理、防范风险的重要依据。每一份档案都承载着保存历史真实、服务科学决策、保障权益发展的独特价值。
+        </p>
+        <p style="margin-top: 16px">
+          为引导全体职工养成<strong style="color: var(--av-main)"
+            >“遇事先查档”</strong
+          >标准化工作习惯，简化办事流程、提升工作效能，实现工作全程有据可查、有章可循、有责可溯，档案馆特编制本操作手册。
+        </p>
+        <p style="margin-top: 16px">
+          本册手册带你读懂档案、熟练用档，推动<strong
+            style="color: var(--av-main)"
+            >“先查档、再办事、后归还”</strong
+          >融入日常业务，让档案成为全体员工工作中的工具书、定心丸、护身符。
+        </p>
+      </section>
+
+      <!-- 一、档案馆各室业务划分（图片树状图） -->
+      <section id="part1" class="card">
+        <div class="card-title-wrap">
+          <span class="line-mark"></span>
+          <h2 class="card-title">一、档案馆各室业务划分</h2>
+        </div>
+        <div class="tree-img-wrap" id="treeImgWrap">
+          <img src="tree.png" alt="科室业务树状图" class="tree-img" />
+          <span class="zoom-hint">点击放大查看</span>
+        </div>
+      </section>
+
+      <!-- 图片灯箱 -->
+      <div class="lightbox" id="lightbox">
+        <button class="lightbox-close" id="lightboxClose">×</button>
+        <img src="tree.png" alt="科室业务树状图（放大）" />
+      </div>
+
+      <!-- 二、查档适用场景 -->
+      <section id="part2" class="card">
+        <div class="card-title-wrap">
+          <span class="line-mark"></span>
+          <h2 class="card-title">二、哪些场景需要“遇事先查档”</h2>
+        </div>
+        <div class="step-item">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>处理历史遗留事项、核查过往工作</h4>
+            <p>
+              处理多年前型号项目遗留问题先查档核实当年研制过程、决策意见、未闭环事项；核查历史工程更改可核对更改单、图纸版次、生产执行情况，精准定位问题，规避漏改错改风险。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>开展新项目、借鉴同类工作经验</h4>
+            <p>
+              新机设计、方案论证前查阅同类产品历史设计方案、技术指标、实验数据，继承成熟技术、规避历史缺陷，保障技术连贯一致。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>编写文件，调取历史数据资料</h4>
+            <p>
+              编制专利、科技成果材料时，调取历史试验、对比测试数据，保证数据真实权威，完善技术证据链，提升编写效率与质量。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>工作交接、接手新任务</h4>
+            <p>
+              新员工接手岗位/型号，查阅项目档案、技术台账、问题库，快速熟悉工作脉络、岗位职责与业务流程。
+            </p>
+          </div>
+        </div>
+        <div class="step-item">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>个人职称评定</h4>
+            <p>
+              评定职称时，快速检索工艺攻关、项目成果、专利等档案材料，充实申报内容。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 三、查档常见障碍与破解方法 -->
+      <section id="part3" class="card">
+        <div class="card-title-wrap">
+          <span class="line-mark"></span>
+          <h2 class="card-title">三、查档常见障碍与破解方法</h2>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th width="40%">查阅障碍</th>
+                <th>对应解决方法</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>不知道档案在哪里</td>
+                <td>先问部门兼职档案员，每个部门均配备专属档案管理人员</td>
+              </tr>
+              <tr>
+                <td>档案信息不准确、不完整</td>
+                <td>先在兰台系统按产品/项目粗查，再根据已知信息精准检索</td>
+              </tr>
+              <tr>
+                <td>查借阅流程不清晰</td>
+                <td>
+                  兰台系统勾选文件加入暂存架，填写利用申请，按需发起下载/借阅流程，按系统通知完成操作
+                </td>
+              </tr>
+              <tr>
+                <td>历史资料未归档，无档案可查</td>
+                <td>从现在做起，每项工作完成后主动完成资料归档</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 四、档案索引 -->
+      <section id="part4" class="card">
+        <div class="card-title-wrap">
+          <span class="line-mark"></span>
+          <h2 class="card-title">四、特定情况查档档案索引</h2>
+        </div>
+        <p>点击下方条目查看详情</p>
+        <div class="index-list" id="queryList">
+          <div class="index-item" data-id="1">
+            工艺、工装底图、CAPP工艺数据接收更改、蓝图发放
+          </div>
+          <div class="index-item" data-id="2">
+            设计底图、PDM设计数据接收更改、蓝图发放
+          </div>
+          <div class="index-item" data-id="3">资料复晒</div>
+          <div class="index-item" data-id="4">
+            文书、产品、技改、合同、预研、财务、标准、知识等档案接收、查借阅
+          </div>
+          <div class="index-item" data-id="5">外来文件管理</div>
+          <div class="index-item" data-id="6">
+            产品软件、PCB光盘的接收、查借阅
+          </div>
+          <div class="index-item" data-id="7">
+            民机项目转包生产、证书、奖状等档案查借阅
+          </div>
+          <div class="index-item" data-id="8">秦岭科技编辑出版</div>
+          <div class="index-item" data-id="9">兰台账户注册、更改、系统维护</div>
+        </div>
+      </section>
+
+      <!-- 弹窗遮罩（点击可关闭弹窗） -->
+      <div class="popup-overlay" id="popupOverlay"></div>
+
+      <!-- 弹窗（伪子页面） -->
+      <div class="popup" id="popup">
+        <div class="popup-header">
+          <h3 id="popTitle">详情查阅</h3>
+          <button class="popup-close" id="closePop">×</button>
+        </div>
+        <div class="popup-body" id="popContent"></div>
+        <div class="popup-footer">
+          <button class="pop-btn close-pop" id="closePopFooter">关闭</button>
+        </div>
+      </div>
+
+      <!-- 结语 -->
+      <section id="ending" class="end-card">
+        <div class="card-title-wrap">
+          <span class="line-mark"></span>
+          <h2 class="card-title" style="color: #fff">结语</h2>
+        </div>
+        <p>档案是单位的“记忆银行”，存进去的是材料，取出来的是效率和安全。</p>
+        <p>从今天起，把“查档”变成工作的第一步。</p>
+        <p class="strong-text">你会发现：很多难题，档案早已写好了答案。</p>
+        <div class="footer-sign">
+          <p>航空工业电源档案馆</p>
+          <p>印制日期：2026.06.08</p>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // 侧边菜单逻辑
+      const sidebar = document.getElementById("sidebar");
+      const mask = document.getElementById("mask");
+      const openBtn = document.getElementById("openMenu");
+      const closeMenu = document.getElementById("closeMenu");
+      const navLinks = document.querySelectorAll(".nav-item");
+      const sections = document.querySelectorAll("section[id]");
+
+      function openMenuFn() {
+        sidebar.classList.add("open");
+        mask.classList.add("show");
+        document.body.style.overflow = "hidden";
+      }
+      function closeMenuFn() {
+        sidebar.classList.remove("open");
+        mask.classList.remove("show");
+        document.body.style.overflow = "";
+      }
+      openBtn.onclick = openMenuFn;
+      closeMenu.onclick = closeMenuFn;
+      mask.onclick = function () {
+        closeMenuFn();
+        closePopup();
+      };
+      navLinks.forEach((link) => (link.onclick = closeMenuFn));
+
+      // 滚动导航高亮
+      window.addEventListener("scroll", () => {
+        let scrollY = window.scrollY;
+        sections.forEach((sec) => {
+          const top = sec.offsetTop - 140;
+          const height = sec.offsetHeight;
+          const link = document.querySelector(`a[href="#${sec.id}"]`);
+          if (scrollY >= top && scrollY < top + height) {
+            link.classList.add("active");
+          } else {
+            link.classList.remove("active");
+          }
+        });
+      });
+
+      // 档案索引完整数据
+      const indexData = {
+        1: {
+          query: "工艺、工装底图、CAPP工艺数据接收更改、蓝图发放",
+          place: "档案馆底图管理室兴平10号大楼130室",
+          approve: "否，做好相关登记即可",
+          phone: "029-38242154",
+        },
+        2: {
+          query: "设计底图、PDM设计数据接收更改、蓝图发放",
+          place: "档案馆底图管理室兴平10号大楼101室",
+          approve: "否，做好相关登记即可",
+          phone: "029-3824156",
+        },
+        3: {
+          query: "资料复晒",
+          place: "档案馆底图管理室兴平10号大楼101/130室",
+          approve: "是（OA办公平台资料复晒模块发起流程）",
+          phone: "029-3824156 / 029-38242154",
+        },
+        4: {
+          query:
+            "文书、产品、技改、合同、预研、财务、标准、知识等档案接收、查借阅",
+          place: "档案馆综合档案室兴平10号大楼110室",
+          approve:
+            "是（保密业务系统归档移交模块；兰台档案管理系统-借阅利用模块）",
+          phone: "029-38242159",
+        },
+        5: {
+          query: "外来文件管理",
+          place: "档案馆综合管理室兴平10号大楼127室",
+          approve: "是（在手机商网办公平台，资料调拨模块发起流程）",
+          phone: "029-38242152",
+        },
+        6: {
+          query: "产品软件、PCB光盘的接收、查借阅",
+          place: "档案馆数字档案管理室兴平10号大楼133室",
+          approve:
+            "是（PCB光盘在兰台系统提起流程，产品软件在PDM系统提起流程，借阅时还需要出库单）",
+          phone: "029-38242153",
+        },
+        7: {
+          query: "民机项目转包生产、证书、奖状等档案查借阅",
+          place: "档案馆数字档案管理管理室兴平10号大楼133室",
+          approve: "是（OA办公平台事务处理证书借阅模块提起流程）",
+          phone: "029-38242153",
+        },
+        8: {
+          query: "秦岭科技编辑出版",
+          place: "档案馆数字档案管理室兴平10号大楼133室",
+          approve: "否，(论文发表需本部门审查是否涉密，确认无涉密内容）",
+          phone: "029-38242153",
+        },
+        9: {
+          query: "兰台账户注册、更改、系统维护",
+          place: "档案馆数字档案管理室管理室兴平10号大楼133室",
+          approve: "是（公司运维系统应用系统模块发起流程）",
+          phone: "029-38242153",
+        },
+      };
+
+      // 弹窗元素
+      const popup = document.getElementById("popup");
+      const popContent = document.getElementById("popContent");
+      const popTitle = document.getElementById("popTitle");
+      const popupOverlay = document.getElementById("popupOverlay");
+      const closePopBtn = document.getElementById("closePop");
+      const closePopFooterBtn = document.getElementById("closePopFooter");
+
+      // 判断是否需要审批
+      function needsApproval(approveText) {
+        return approveText.startsWith("是");
+      }
+
+      // 点击列表条目，弹出弹窗，展示全部信息
+      document.querySelectorAll(".index-item").forEach((item) => {
+        item.addEventListener("click", function () {
+          const id = this.dataset.id;
+          const data = indexData[id];
+          const isNeed = needsApproval(data.approve);
+
+          popTitle.textContent = data.query;
+
+          popContent.innerHTML = `
+            <div class="info-section">
+              <div class="info-label">去哪里查</div>
+              <div class="info-card">
+                <p>${data.place}</p>
+              </div>
+            </div>
+            <div class="info-section">
+              <div class="info-label">是否需要审批</div>
+              <div class="info-card approve-card ${isNeed ? "" : "no-approve"}">
+                <span class="approve-badge ${isNeed ? "need" : "no-need"}">${isNeed ? "需要审批" : "无需审批"}</span>
+                <p>${data.approve}</p>
+              </div>
+            </div>
+            <div class="info-section">
+              <div class="info-label">科室联系电话</div>
+              <div class="info-card">
+                <p>${data.phone}</p>
+              </div>
+            </div>
+          `;
+
+          popup.classList.add("show");
+          popupOverlay.classList.add("show");
+          mask.classList.add("show");
+          document.body.style.overflow = "hidden";
+        });
+      });
+
+      // 关闭弹窗
+      function closePopup() {
+        popup.classList.remove("show");
+        popupOverlay.classList.remove("show");
+        mask.classList.remove("show");
+        document.body.style.overflow = "";
+        popContent.innerHTML = "";
+      }
+      // 点击弹窗外的遮罩区域关闭弹窗
+      popupOverlay.addEventListener("click", closePopup);
+      closePopBtn.addEventListener("click", closePopup);
+      closePopFooterBtn.addEventListener("click", closePopup);
+
+      // 图片灯箱
+      const lightbox = document.getElementById("lightbox");
+      const lightboxClose = document.getElementById("lightboxClose");
+      const treeImgWrap = document.getElementById("treeImgWrap");
+
+      treeImgWrap.addEventListener("click", function () {
+        lightbox.classList.add("show");
+        document.body.style.overflow = "hidden";
+      });
+      function closeLightbox() {
+        lightbox.classList.remove("show");
+        document.body.style.overflow = "";
+      }
+      lightboxClose.addEventListener("click", closeLightbox);
+      lightbox.addEventListener("click", function (e) {
+        if (e.target === lightbox) closeLightbox();
+      });
+    </script>
+  </body>
+</html>
